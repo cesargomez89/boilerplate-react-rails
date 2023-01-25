@@ -1,0 +1,77 @@
+version: "3.9"
+services:
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379"
+    networks:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  db:
+    image: postgres:15.1-alpine
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    environment:
+      POSTGRES_PASSWORD: 'password'
+    deploy:
+      placement:
+        max_replicas_per_node: 1
+        constraints:
+          - "node.role==manager"
+
+  crud-backend:
+    build: .
+    volumes:
+      - ./:/backend
+    ports:
+      - "3000:3000"
+    networks:
+      - backend
+    depends_on:
+      - db
+      - redis
+    environment:
+      POSTGRES_PASSWORD: 'password'
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - "node.role==manager"
+
+  crud-frontend:
+    build: ./crud-frontend
+    volumes:
+      - ./crud-frontend:/frontend
+    ports:
+      - "4000:4000"
+    networks:
+      - frontend
+    stop_grace_period: 1m30s
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      placement:
+        constraints:
+          - "node.role==manager"
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  db-data:
